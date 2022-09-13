@@ -6,7 +6,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from .stylegan2_clean_arch import StyleGAN2GeneratorClean
-
+import pdb
 
 class StyleGAN2GeneratorCSFT(StyleGAN2GeneratorClean):
     """StyleGAN2 Generator with SFT modulation (Spatial Feature Transform).
@@ -55,24 +55,26 @@ class StyleGAN2GeneratorCSFT(StyleGAN2GeneratorClean):
             return_latents (bool): Whether to return style latents. Default: False.
         """
         # style codes -> latents with Style MLP layer
-        if not input_is_latent:
+        # len(styles), styles[0].size() -- (1, torch.Size([1, 16, 512]))
+        if not input_is_latent: # False
             styles = [self.style_mlp(s) for s in styles]
         # noises
-        if noise is None:
-            if randomize_noise:
-                noise = [None] * self.num_layers  # for each style conv layer
+        if noise is None: #True
+            if randomize_noise: # True
+                noise = [None] * self.num_layers  # self.num_layers -- 15, for each style conv layer
             else:  # use the stored noise
                 noise = [getattr(self.noises, f'noise{i}') for i in range(self.num_layers)]
         # style truncation
-        if truncation < 1:
+        if truncation < 1: # False, truncation -- 1
             style_truncation = []
             for style in styles:
                 style_truncation.append(truncation_latent + truncation * (style - truncation_latent))
             styles = style_truncation
         # get style latents with injection
-        if len(styles) == 1:
+        if len(styles) == 1: # True
             inject_index = self.num_latent
 
+            #  styles[0].ndim -- 3
             if styles[0].ndim < 3:
                 # repeat latent code for all the layers
                 latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
@@ -86,6 +88,7 @@ class StyleGAN2GeneratorCSFT(StyleGAN2GeneratorClean):
             latent = torch.cat([latent1, latent2], 1)
 
         # main generation
+        # latent.size() -- [1, 16, 512]
         out = self.constant_input(latent.shape[0])
         out = self.style_conv1(out, latent[:, 0], noise=noise[0])
         skip = self.to_rgb1(out, latent[:, 1])
@@ -96,9 +99,9 @@ class StyleGAN2GeneratorCSFT(StyleGAN2GeneratorClean):
             out = conv1(out, latent[:, i], noise=noise1)
 
             # the conditions may have fewer levels
-            if i < len(conditions):
+            if i < len(conditions): # len(conditions) -- 14
                 # SFT part to combine the conditions
-                if self.sft_half:  # only apply SFT to half of the channels
+                if self.sft_half:  # True, only apply SFT to half of the channels
                     out_same, out_sft = torch.split(out, int(out.size(1) // 2), dim=1)
                     out_sft = out_sft * conditions[i - 1] + conditions[i]
                     out = torch.cat([out_same, out_sft], dim=1)
@@ -111,7 +114,7 @@ class StyleGAN2GeneratorCSFT(StyleGAN2GeneratorClean):
 
         image = skip
 
-        if return_latents:
+        if return_latents: # False
             return image, latent
         else:
             return image, None

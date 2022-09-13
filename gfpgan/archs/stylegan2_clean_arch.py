@@ -5,7 +5,7 @@ from basicsr.archs.arch_util import default_init_weights
 from basicsr.utils.registry import ARCH_REGISTRY
 from torch import nn
 from torch.nn import functional as F
-
+import pdb
 
 class NormStyleCode(nn.Module):
 
@@ -45,6 +45,11 @@ class ModulatedConv2d(nn.Module):
                  sample_mode=None,
                  eps=1e-8):
         super(ModulatedConv2d, self).__init__()
+        # in_channels = 512
+        # out_channels = 512
+        # kernel_size = 3
+        # num_style_feat = 512
+        # sample_mode = None
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -60,7 +65,7 @@ class ModulatedConv2d(nn.Module):
         self.weight = nn.Parameter(
             torch.randn(1, out_channels, in_channels, kernel_size, kernel_size) /
             math.sqrt(in_channels * kernel_size**2))
-        self.padding = kernel_size // 2
+        self.padding = kernel_size // 2 # 1
 
     def forward(self, x, style):
         """Forward function.
@@ -122,12 +127,16 @@ class StyleConv(nn.Module):
         self.weight = nn.Parameter(torch.zeros(1))  # for noise injection
         self.bias = nn.Parameter(torch.zeros(1, out_channels, 1, 1))
         self.activate = nn.LeakyReLU(negative_slope=0.2, inplace=True)
+        # in_channels = 512
+        # out_channels = 512
+        # kernel_size = 3
+        # num_style_feat = 512
 
     def forward(self, x, style, noise=None):
         # modulate
         out = self.modulated_conv(x, style) * 2**0.5  # for conversion
         # noise injection
-        if noise is None:
+        if noise is None: # True
             b, _, h, w = out.shape
             noise = out.new_empty(b, 1, h, w).normal_()
         out = out + self.weight * noise
@@ -205,6 +214,8 @@ class StyleGAN2GeneratorClean(nn.Module):
 
     def __init__(self, out_size, num_style_feat=512, num_mlp=8, channel_multiplier=2, narrow=1):
         super(StyleGAN2GeneratorClean, self).__init__()
+        # out_size = 512
+
         # Style MLP layers
         self.num_style_feat = num_style_feat
         style_mlp_layers = [NormStyleCode()]
@@ -232,10 +243,10 @@ class StyleGAN2GeneratorClean(nn.Module):
 
         self.constant_input = ConstantInput(channels['4'], size=4)
         self.style_conv1 = StyleConv(
-            channels['4'],
-            channels['4'],
+            channels['4'], # 512
+            channels['4'], # 512
             kernel_size=3,
-            num_style_feat=num_style_feat,
+            num_style_feat=num_style_feat, # 512
             demodulate=True,
             sample_mode=None)
         self.to_rgb1 = ToRGB(channels['4'], num_style_feat, upsample=False)
@@ -248,14 +259,14 @@ class StyleGAN2GeneratorClean(nn.Module):
         self.to_rgbs = nn.ModuleList()
         self.noises = nn.Module()
 
-        in_channels = channels['4']
+        in_channels = channels['4'] # 512
         # noise
-        for layer_idx in range(self.num_layers):
+        for layer_idx in range(self.num_layers): # self.num_layers--15
             resolution = 2**((layer_idx + 5) // 2)
             shape = [1, 1, resolution, resolution]
             self.noises.register_buffer(f'noise{layer_idx}', torch.randn(*shape))
         # style convs and to_rgbs
-        for i in range(3, self.log_size + 1):
+        for i in range(3, self.log_size + 1): # self.log_size -- 9
             out_channels = channels[f'{2**i}']
             self.style_convs.append(
                 StyleConv(
@@ -326,16 +337,16 @@ class StyleGAN2GeneratorClean(nn.Module):
             else:  # use the stored noise
                 noise = [getattr(self.noises, f'noise{i}') for i in range(self.num_layers)]
         # style truncation
-        if truncation < 1:
+        if truncation < 1: # False
             style_truncation = []
             for style in styles:
                 style_truncation.append(truncation_latent + truncation * (style - truncation_latent))
             styles = style_truncation
         # get style latents with injection
-        if len(styles) == 1:
+        if len(styles) == 1: # True
             inject_index = self.num_latent
 
-            if styles[0].ndim < 3:
+            if styles[0].ndim < 3: # False
                 # repeat latent code for all the layers
                 latent = styles[0].unsqueeze(1).repeat(1, inject_index, 1)
             else:  # used for encoder with different latent code for each layer

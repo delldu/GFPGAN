@@ -11,7 +11,7 @@ from gfpgan.archs.gfpganv1_arch import GFPGANv1
 from gfpgan.archs.gfpganv1_clean_arch import GFPGANv1Clean
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
+import pdb
 
 class GFPGANer():
     """Helper for restoration with GFPGAN.
@@ -90,17 +90,18 @@ class GFPGANer():
             device=self.device,
             model_rootpath='gfpgan/weights')
 
-        if model_path.startswith('https://'):
-            model_path = load_file_from_url(
-                url=model_path, model_dir=os.path.join(ROOT_DIR, 'gfpgan/weights'), progress=True, file_name=None)
+
+        # model_path -- 'experiments/pretrained_models/GFPGANv1.3.pth'
         loadnet = torch.load(model_path)
-        if 'params_ema' in loadnet:
+        if 'params_ema' in loadnet: # True
             keyname = 'params_ema'
         else:
             keyname = 'params'
         self.gfpgan.load_state_dict(loadnet[keyname], strict=True)
         self.gfpgan.eval()
         self.gfpgan = self.gfpgan.to(self.device)
+        # xxxx8888
+        # torch.save(self.gfpgan.state_dict(), "/tmp/face_gan.pth")
 
     @torch.no_grad()
     def enhance(self, img, has_aligned=False, only_center_face=False, paste_back=True, weight=0.5):
@@ -121,12 +122,17 @@ class GFPGANer():
         # face restoration
         for cropped_face in self.face_helper.cropped_faces:
             # prepare data
+
+            # xxxx8888
             cropped_face_t = img2tensor(cropped_face / 255., bgr2rgb=True, float32=True)
             normalize(cropped_face_t, (0.5, 0.5, 0.5), (0.5, 0.5, 0.5), inplace=True)
             cropped_face_t = cropped_face_t.unsqueeze(0).to(self.device)
 
             try:
+                # cropped_face_t.size() -- [1, 3, 512, 512]
                 output = self.gfpgan(cropped_face_t, return_rgb=False, weight=weight)[0]
+                #  output.size() -- [1, 3, 512, 512]
+
                 # convert to image
                 restored_face = tensor2img(output.squeeze(0), rgb2bgr=True, min_max=(-1, 1))
             except RuntimeError as error:
